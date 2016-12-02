@@ -20,7 +20,7 @@ data Direction
     | West
     deriving Show
 
-data Position = Position Integer Integer deriving Show
+data Position = Position Integer Integer deriving (Show, Eq)
 
 data Movement
     = MoveLeft Integer
@@ -29,7 +29,7 @@ data Movement
 
 data Player = Player
     { direction :: Direction
-    , position :: Position
+    , positions :: [Position]
     , movement :: Maybe Movement
     } deriving Show
 
@@ -39,31 +39,43 @@ printError e = do
     putStrLn e
 
 run :: [Movement] -> IO ()
-run ms =
+run ms = do
     putStrLn $ "Distance: " ++ show (distanceOf playerAfterMovement)
+    putStrLn $ "First Repeated Position Distance: " ++ show (repeatedPositionDistanceOf playerAfterMovement)
   where
-    distanceOf = manhattanDistanceFromOrigin . position
+    distanceOf = manhattanDistanceFromOrigin . last . positions
+    repeatedPositionDistanceOf = fmap manhattanDistanceFromOrigin . firstRepeated . positions
     playerAfterMovement = foldl movePlayer initialPlayer ms
 
 manhattanDistanceFromOrigin :: Position -> Integer
 manhattanDistanceFromOrigin (Position x y) = abs x + abs y
 
+firstRepeated :: Eq a => [a] -> Maybe a
+firstRepeated = go []
+  where
+    go _ [] = Nothing
+    go visited (x:xs') =
+        if x `elem` visited
+            then Just x
+            else go xs' (visited ++ [x])
+
 initialPlayer :: Player
-initialPlayer = Player North (Position 0 0) Nothing
+initialPlayer = Player North [Position 0 0] Nothing
 
 movePlayer :: Player -> Movement -> Player
-movePlayer p m = p { direction = newDirection, position = newPosition, movement = Just m }
+movePlayer p m = p { direction = newDirection, positions = positions p ++ newPositions, movement = Just m }
   where
     newDirection = calculateNewDirection (direction p) m
-    newPosition = calculateNewPosition (position p) newDirection m
+    newPositions = calculateNewPosition currentPosition newDirection m
+    currentPosition = last $ positions p
 
-calculateNewPosition :: Position -> Direction -> Movement -> Position
+calculateNewPosition :: Position -> Direction -> Movement -> [Position]
 calculateNewPosition (Position startX startY) d m =
     case d of
-        North -> Position  startX            (startY + distance)
-        South -> Position  startX            (startY - distance)
-        East ->  Position (startX + distance) startY
-        West ->  Position (startX - distance) startY
+        North -> [ Position startX (startY + i) | i <- [1..distance] ]
+        South -> [ Position startX (startY - i) | i <- [1..distance] ]
+        East ->  [ Position (startX + i) startY | i <- [1..distance] ]
+        West ->  [ Position (startX - i) startY | i <- [1..distance] ]
   where
     distance = movementDistance m
 
