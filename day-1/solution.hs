@@ -1,9 +1,6 @@
 #!/usr/bin/env stack
 -- stack --install-ghc runghc --package text --package megaparsec
 
-import           Control.Monad (void)
-import qualified Data.Bifunctor as BF
-import           Data.Scientific (toRealFloat)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Text.Megaparsec
@@ -11,27 +8,26 @@ import qualified Text.Megaparsec.Lexer as L
 import           Text.Megaparsec.Text
 
 main :: IO ()
-main = either printError run . parseInput . T.pack =<< getContents
+main = either (printError . show) run . parseInput . T.pack =<< getContents
 
 data Direction
     = North
-    | South
     | East
+    | South
     | West
-    deriving Show
+    deriving Enum
 
-data Position = Position Integer Integer deriving (Show, Eq)
+data Position = Position Integer Integer deriving Eq
 
 data Movement
     = MoveLeft Integer
     | MoveRight Integer
-    deriving Show
 
 data Player = Player
     { direction :: Direction
     , positions :: [Position]
     , movement :: Maybe Movement
-    } deriving Show
+    }
 
 printError :: String -> IO ()
 printError e = do
@@ -80,21 +76,17 @@ calculateNewPosition (Position startX startY) d m =
     distance = movementDistance m
 
 calculateNewDirection :: Direction -> Movement -> Direction
-calculateNewDirection North (MoveLeft _)  = West
-calculateNewDirection North (MoveRight _) = East
-calculateNewDirection South (MoveLeft _)  = East
-calculateNewDirection South (MoveRight _) = West
-calculateNewDirection East  (MoveLeft _)  = North
-calculateNewDirection East  (MoveRight _) = South
-calculateNewDirection West  (MoveLeft _)  = South
-calculateNewDirection West  (MoveRight _) = North
+calculateNewDirection North (MoveLeft _) = West
+calculateNewDirection d (MoveLeft _) = pred d
+calculateNewDirection West (MoveRight _) = North
+calculateNewDirection d (MoveRight _) = succ d
 
 movementDistance :: Movement -> Integer
 movementDistance (MoveLeft i) = i
 movementDistance (MoveRight i) = i
 
-parseInput :: Text -> Either String [Movement]
-parseInput = parseOnly (movementsParser <* eof) . T.strip
+parseInput :: Text -> Either ParseError [Movement]
+parseInput = runParser (movementsParser <* eof) "" . T.strip
 
 movementsParser :: Parser [Movement]
 movementsParser = movementParser `sepBy1` string ", "
@@ -104,6 +96,3 @@ movementParser = parseLeft <|> parseRight
   where
     parseLeft = MoveLeft <$> (string "L" *> L.integer)
     parseRight = MoveRight <$> (string "R" *> L.integer)
-
-parseOnly :: Parser a -> Text -> Either String a
-parseOnly p = BF.first show . runParser p ""
