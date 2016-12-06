@@ -1,8 +1,10 @@
 #!/usr/bin/env stack
--- stack --install-ghc runghc --package text --package megaparsec
+-- stack --install-ghc runghc --package text --package megaparsec --package split
 
 {-# LANGUAGE OverloadedStrings #-}
 
+import qualified Data.List as L
+import           Data.List.Split (chunksOf)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Text.Megaparsec
@@ -29,16 +31,18 @@ isValidTriangle (Polygon [Side (Length l1), Side (Length l2), Side (Length l3)])
     l1 + l2 > l3 && l2 + l3 > l1 && l1 + l3 > l2
 isValidTriangle _ = False
 
+integersToPolygons :: [[Integer]] -> [Polygon]
+integersToPolygons = map toPolygon . chunksOf 3 . concat . L.transpose
+  where
+    toPolygon = Polygon . map (Side . Length)
+
 parseInput :: Text -> Either ParseError [Polygon]
-parseInput = runParser (polygonsParser <* eof) "" . T.strip
+parseInput = fmap integersToPolygons . runParser (integersParser <* eof) "" . T.strip
 
-polygonsParser :: Parser [Polygon]
-polygonsParser = polygonParser `sepBy1` newline
+integersParser :: Parser [[Integer]]
+integersParser = integerRowParser `sepBy1` newline
 
-polygonParser :: Parser Polygon
-polygonParser = Polygon <$> (whitespace *> sideParser `sepBy1` whitespace)
+integerRowParser :: Parser [Integer]
+integerRowParser = whitespace *> L.integer `sepBy1` whitespace
   where
     whitespace = many $ string " "
-
-sideParser :: Parser Side
-sideParser = Side . Length <$> L.integer
