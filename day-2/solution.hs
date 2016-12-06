@@ -3,6 +3,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+import qualified Data.Either as E
 import qualified Data.Maybe as M
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -33,9 +34,9 @@ data Player = Player
 
 newtype KeypadWidth = KeypadWidth { getKeyboardWidth :: Int } deriving Show
 newtype KeypadHeight = KeypadHeight { getKeyboardHeight :: Int } deriving Show
-newtype KeypadColumn = KeypadColumn Integer deriving Show
+newtype KeypadColumn = KeypadColumn Text deriving Show
 
-type KeypadRow = [KeypadColumn]
+type KeypadRow = [Maybe KeypadColumn]
 data KeypadPosition = KeypadPosition Int Int deriving Show
 
 main :: IO ()
@@ -55,15 +56,17 @@ createKeypadFromRows krs = Keypad krs width height center
     emptyPosition = KeypadPosition 0 0
 
 isValidPosition :: Keypad -> KeypadPosition -> Bool
-isValidPosition k (KeypadPosition x y)
+isValidPosition k pos@(KeypadPosition x y)
     | x < 0 = False
     | y < 0 = False
     | x + 1 > width = False
     | y + 1 > height = False
-    | otherwise = True
+    | otherwise = legitimatePosition $ keypadColumnAtPosition k pos
   where
     width = getKeyboardWidth $ kWidth k
     height = getKeyboardHeight $ kHeight k
+    legitimatePosition (Right (Just _)) = True
+    legitimatePosition _ = False
 
 modifyPosition :: KeypadPosition -> Command -> KeypadPosition
 modifyPosition (KeypadPosition x y) MoveLeft = KeypadPosition (x - 1) y
@@ -87,16 +90,16 @@ keypadCenter (KeypadWidth w) (KeypadHeight h) =
   where
     positionOnCoordinates v = round $ (fromIntegral (v + 1)/2) - 1
 
-keypadColumnAtPosition :: Keypad -> KeypadPosition -> Either Text KeypadColumn
+keypadColumnAtPosition :: Keypad -> KeypadPosition -> Either Text (Maybe KeypadColumn)
 keypadColumnAtPosition k (KeypadPosition x y) = Right $ kRows k !! y !! x
 
 run :: [Commands] -> IO ()
 run commands = do
     print commands
-    let (Right keypad) = parseKeypad "1 2 3\n4 5 6\n7 8 9"
+    let (Right keypad) = parseKeypad "- - 1 - -\n- 2 3 4 -\n5 6 7 8 9\n- A B C -\n- - D - -"
     let player = Player keypad (kCenter keypad)
     let finalPositions = snd $ foldl go (player, []) commands
-    print $ map (keypadColumnAtPosition keypad) finalPositions
+    print $ E.rights $ map (keypadColumnAtPosition keypad) finalPositions
   where
     go (player, positions) cmds = (newPlayer, positions ++ [newPosition])
       where
@@ -126,5 +129,8 @@ keypadParser = createKeypadFromRows <$> keypadRowParser `sepBy1` newline
 keypadRowParser :: Parser KeypadRow
 keypadRowParser = keypadColumnParser `sepBy1` string " "
 
-keypadColumnParser :: Parser KeypadColumn
-keypadColumnParser = KeypadColumn <$> L.integer
+keypadColumnParser :: Parser (Maybe KeypadColumn)
+keypadColumnParser = go <$> anyChar
+  where
+    go '-' = Nothing
+    go v = Just $ KeypadColumn $ T.singleton v
