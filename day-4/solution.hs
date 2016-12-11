@@ -5,6 +5,7 @@
 
 import           Control.Arrow ((&&&))
 import           Control.Monad (void)
+import qualified Data.Char as C
 import           Data.Function (on)
 import qualified Data.List as L
 import           Data.Text (Text)
@@ -13,18 +14,19 @@ import           Text.Megaparsec
 import qualified Text.Megaparsec.Lexer as L
 import           Text.Megaparsec.Text
 
-newtype EncryptedName = EncryptedName { encryptedName :: Text }
-newtype SectorId = SectorId { sectorId :: Integer }
-newtype Checksum = Checksum Text deriving Eq
+newtype EncryptedName = EncryptedName { encryptedName :: Text } deriving Show
+newtype DecryptedName = DecryptedName { decryptedName :: Text } deriving Show
+newtype SectorId = SectorId { sectorId :: Integer } deriving Show
+newtype Checksum = Checksum Text deriving (Show, Eq)
 
 data Room = Room
     { rEncryptedName :: EncryptedName
     , rSectorId :: SectorId
     , rChecksum :: Checksum
-    }
+    } deriving Show
 
 main :: IO ()
-main = either (printError . show) run . parseInput . T.pack =<< getContents 
+main = either (printError . show) run . parseInput . T.pack =<< getContents
 
 printError :: String -> IO ()
 printError e = do
@@ -32,7 +34,20 @@ printError e = do
     putStrLn e
 
 run :: [Room] -> IO ()
-run = print . sum . map (sectorId . rSectorId) . filter isValidRoom
+run = print . filter (namedNorthPole . fst) . map decryptRoom . filter isValidRoom
+
+namedNorthPole :: DecryptedName -> Bool
+namedNorthPole (DecryptedName n) =
+    T.isInfixOf "north" n && T.isInfixOf "pole" n
+
+decryptRoom :: Room -> (DecryptedName, Room)
+decryptRoom = decryptedName' &&& id
+  where
+    decryptedName' = uncurry decryptText . (rSectorId &&& rEncryptedName)
+
+decryptText :: SectorId -> EncryptedName -> DecryptedName
+decryptText (SectorId i) =
+    DecryptedName . T.concatMap (T.singleton . rotateChar (fromInteger i)) . encryptedName
 
 parseInput :: Text -> Either ParseError [Room]
 parseInput = runParser (roomsParser <* eof) "" . T.strip
@@ -72,3 +87,12 @@ frequencyToChecksum = Checksum . T.pack . go
 
 frequency :: Ord a => [a] -> [(a, Int)]
 frequency = map (head &&& length) . L.group . L.sort
+
+rotateChar :: Int -> Char -> Char
+rotateChar _ '-' = ' '
+rotateChar i c = go c
+  where
+    go = C.chr . handleOvershift . (+ (i `rem` 26)) . C.ord
+    handleOvershift i'
+        | i' > 122 = i' - 26
+        | otherwise = i'
