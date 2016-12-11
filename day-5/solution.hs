@@ -3,8 +3,11 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+import           Control.Lens
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Data.ByteString.Base16 as B16
+import qualified Data.Char as C
+import qualified Data.List as L
 import qualified Data.Maybe as M
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -22,19 +25,35 @@ printError e = do
     putStrLn e
 
 run :: DoorId -> IO ()
-run = print . take 8 . M.catMaybes . generatePasswordCharacters
+run = print . filterToResult . M.catMaybes . generatePasswordCharacters
 
-generatePasswordCharacters :: DoorId -> [Maybe Char]
+filterToResult :: [(Int, Char)] -> String
+filterToResult = go (map (const Nothing) [1..8])
+  where
+    go pw vs
+        | all M.isJust pw = M.catMaybes pw
+        | otherwise = populateList pw vs
+    populateList pw (v:vs) = go (updatePasswordList pw v) vs
+    updatePasswordList pw (i, c) =
+        if M.isJust $ pw !! i
+            then pw
+            else (element i .~ Just c) pw
+
+generatePasswordCharacters :: DoorId -> [Maybe (Int, Char)]
 generatePasswordCharacters (DoorId t) = map go [0..]
   where
     go = nextCharacterInPassword . hashText . combine
     combine = T.append t . T.pack . show
 
-nextCharacterInPassword :: HashResult -> Maybe Char
+nextCharacterInPassword :: HashResult -> Maybe (Int, Char)
 nextCharacterInPassword (HashResult t) =
-    if T.isPrefixOf "00000" t
-        then Just $ T.index t 5
+    if T.isPrefixOf "00000" t && position `elem` validPositions
+        then Just (C.digitToInt position, value)
         else Nothing
+  where
+    position = T.index t 5
+    value = T.index t 6
+    validPositions = "01234567" :: String
 
 hashText :: Text -> HashResult
 hashText = HashResult . T.decodeUtf8 . B16.encode . MD5.hash . T.encodeUtf8
