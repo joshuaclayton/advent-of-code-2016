@@ -22,7 +22,7 @@ run :: [Signal] -> IO ()
 run = print . map mostFrequentFromSignal
 
 mostFrequentFromSignal :: Signal -> Char
-mostFrequentFromSignal = fst . last . L.sortOn snd . signal
+mostFrequentFromSignal = fst . head . L.sortOn snd . signal
 
 parseInput :: Text -> Either Text [Signal]
 parseInput = Right . map toSignal . T.transpose . T.lines
