@@ -1,0 +1,43 @@
+#!/usr/bin/env stack
+-- stack --install-ghc runghc --package text --package megaparsec
+
+{-# LANGUAGE OverloadedStrings #-}
+
+import qualified Crypto.Hash.MD5 as MD5
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.Maybe as M
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+
+newtype DoorId = DoorId { doorId :: Text } deriving Show
+newtype HashResult = HashResult { hashResult :: Text } deriving Show
+
+main :: IO ()
+main = either (printError . show) run . parseInput . T.pack =<< getContents
+
+printError :: String -> IO ()
+printError e = do
+    putStrLn "There was a problem parsing the input:\n"
+    putStrLn e
+
+run :: DoorId -> IO ()
+run = print . take 8 . M.catMaybes . generatePasswordCharacters
+
+generatePasswordCharacters :: DoorId -> [Maybe Char]
+generatePasswordCharacters (DoorId t) = map go [0..]
+  where
+    go = nextCharacterInPassword . hashText . combine
+    combine = T.append t . T.pack . show
+
+nextCharacterInPassword :: HashResult -> Maybe Char
+nextCharacterInPassword (HashResult t) =
+    if T.isPrefixOf "00000" t
+        then Just $ T.index t 5
+        else Nothing
+
+hashText :: Text -> HashResult
+hashText = HashResult . T.decodeUtf8 . B16.encode . MD5.hash . T.encodeUtf8
+
+parseInput :: Text -> Either Text DoorId
+parseInput = Right . DoorId . T.strip
