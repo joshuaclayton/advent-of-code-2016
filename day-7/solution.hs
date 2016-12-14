@@ -18,6 +18,8 @@ data IPv7Sequence
 data IPv7 = IPv7 [IPv7Sequence]
 
 newtype ABBA = ABBA Text
+newtype ABA = ABA Text
+newtype BAB = BAB Text
 
 main :: IO ()
 main = either (printError . show) run . parseInput . T.pack =<< getContents
@@ -28,7 +30,7 @@ printError e = do
     putStrLn e
 
 run :: [IPv7] -> IO ()
-run = print . length . filter doesIPSupportTls
+run = print . length . filter doesIPSupportSsl
 
 isSupernetSequence :: IPv7Sequence -> Bool
 isSupernetSequence (SupernetSequence _) = True
@@ -39,6 +41,13 @@ supernetSequences = filter isSupernetSequence
 
 hypernetSequences :: [IPv7Sequence] -> [IPv7Sequence]
 hypernetSequences = filter (not . isSupernetSequence)
+
+doesIPSupportSsl :: IPv7 -> Bool
+doesIPSupportSsl (IPv7 sequences) = any go allAbas
+  where
+    go aba = anySupernetSequencesHaveABA aba sequences && anyHypernetSequencesHaveBAB (correspondingBab aba) sequences
+    anySupernetSequencesHaveABA aba = any (doesSequenceIncludeABA aba) . supernetSequences
+    anyHypernetSequencesHaveBAB bab = any (doesSequenceIncludeBAB bab) . hypernetSequences
 
 doesIPSupportTls :: IPv7 -> Bool
 doesIPSupportTls (IPv7 sequences) = anySupernetSequencesHaveABBA sequences && noHypernetSequencesHaveABBA sequences
@@ -52,6 +61,25 @@ sequenceValue (HypernetSequence t) = t
 
 doesSequenceIncludeABBA :: IPv7Sequence -> Bool
 doesSequenceIncludeABBA s = any (\(ABBA t) -> T.isInfixOf t (sequenceValue s)) allAbbas
+
+doesSequenceIncludeABA :: ABA -> IPv7Sequence -> Bool
+doesSequenceIncludeABA (ABA t) s = T.isInfixOf t (sequenceValue s)
+
+doesSequenceIncludeBAB :: BAB -> IPv7Sequence -> Bool
+doesSequenceIncludeBAB (BAB t) s = T.isInfixOf t (sequenceValue s)
+
+allAbas :: [ABA]
+allAbas = go allCombinations
+  where
+    go = map (ABA . T.pack) . filter (not . sameChar)
+    sameChar (a:b:_) = a == b
+    allCombinations = [ [a,b,a] | a <- ['a'..'z'], b <- ['a'..'z'] ]
+
+correspondingBab :: ABA -> BAB
+correspondingBab (ABA t) = BAB $ go t
+  where
+    go = T.pack . process . T.unpack
+    process (a:b:_) = [b, a, b]
 
 allAbbas :: [ABBA]
 allAbbas = go allCombinations
