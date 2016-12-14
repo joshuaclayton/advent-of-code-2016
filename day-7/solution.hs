@@ -11,7 +11,7 @@ import qualified Text.Megaparsec.Lexer as L
 import           Text.Megaparsec.Text
 
 data IPv7Sequence
-    = NormalSequence Text
+    = SupernetSequence Text
     | HypernetSequence Text
     deriving Show
 
@@ -30,24 +30,24 @@ printError e = do
 run :: [IPv7] -> IO ()
 run = print . length . filter doesIPSupportTls
 
-isNormalSequence :: IPv7Sequence -> Bool
-isNormalSequence (NormalSequence _) = True
-isNormalSequence _ = False
+isSupernetSequence :: IPv7Sequence -> Bool
+isSupernetSequence (SupernetSequence _) = True
+isSupernetSequence _ = False
 
-normalSequences :: [IPv7Sequence] -> [IPv7Sequence]
-normalSequences = filter isNormalSequence
+supernetSequences :: [IPv7Sequence] -> [IPv7Sequence]
+supernetSequences = filter isSupernetSequence
 
 hypernetSequences :: [IPv7Sequence] -> [IPv7Sequence]
-hypernetSequences = filter (not . isNormalSequence)
+hypernetSequences = filter (not . isSupernetSequence)
 
 doesIPSupportTls :: IPv7 -> Bool
-doesIPSupportTls (IPv7 sequences) = anyNormalSequencesHaveABBA sequences && noHypernetSequencesHaveABBA sequences
+doesIPSupportTls (IPv7 sequences) = anySupernetSequencesHaveABBA sequences && noHypernetSequencesHaveABBA sequences
   where
-    anyNormalSequencesHaveABBA = any doesSequenceIncludeABBA . normalSequences
+    anySupernetSequencesHaveABBA = any doesSequenceIncludeABBA . supernetSequences
     noHypernetSequencesHaveABBA = all (not . doesSequenceIncludeABBA) . hypernetSequences
 
 sequenceValue :: IPv7Sequence -> Text
-sequenceValue (NormalSequence t) = t
+sequenceValue (SupernetSequence t) = t
 sequenceValue (HypernetSequence t) = t
 
 doesSequenceIncludeABBA :: IPv7Sequence -> Bool
@@ -69,13 +69,13 @@ ipV7sParser :: Parser [IPv7]
 ipV7sParser = ipV7parser `sepBy1` newline
 
 ipV7parser :: Parser IPv7
-ipV7parser = IPv7 <$> many (try hypernetSequenceParser <|> normalSequenceParser)
+ipV7parser = IPv7 <$> many (try hypernetSequenceParser <|> supernetSequenceParser)
 
 hypernetSequenceParser :: Parser IPv7Sequence
 hypernetSequenceParser = (HypernetSequence . T.pack) <$> brackets (some alphaNumChar)
 
-normalSequenceParser :: Parser IPv7Sequence
-normalSequenceParser = NormalSequence . T.pack <$> some alphaNumChar
+supernetSequenceParser :: Parser IPv7Sequence
+supernetSequenceParser = SupernetSequence . T.pack <$> some alphaNumChar
 
 brackets :: Parser a -> Parser a
 brackets = between (symbol "[") (symbol "]")
