@@ -24,7 +24,20 @@ printError e = do
     putStrLn e
 
 run :: [Chunk] -> IO ()
-run = print . T.length . T.concat . map chunkToText
+run = print . sum . map chunkLength
+
+chunkLength :: Chunk -> Int
+chunkLength c@(Repeated t (Times x)) =
+    x * sum (map chunkLength (parseResult t))
+chunkLength c@(Pure t) =
+    case parseResult t of
+      [Pure t'] -> T.length t'
+      rs -> sum $ map chunkLength rs
+
+parseResult :: Text -> [Chunk]
+parseResult = right . parseInput
+  where
+    right (Right v) = v
 
 chunkToText :: Chunk -> Text
 chunkToText (Pure t) = t
