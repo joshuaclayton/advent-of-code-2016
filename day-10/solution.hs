@@ -14,7 +14,7 @@ import           Text.Megaparsec
 import qualified Text.Megaparsec.Lexer as L
 import           Text.Megaparsec.Text
 
-newtype Value = Value Int deriving (Eq, Ord, Show)
+newtype Value = Value { value :: Int } deriving (Eq, Ord, Show)
 newtype BotId = BotId Int deriving (Eq, Ord, Show)
 newtype OutputId = OutputId Int deriving (Eq, Ord, Show)
 newtype LowRecipient = LowRecipient { lowRecipient :: Recipient } deriving Show
@@ -70,7 +70,6 @@ reevaluateWorld :: World -> World
 reevaluateWorld w =
     case (length botsToReevaluate, worldsEnd w) of
         (0, _) -> w
-        (_, True) -> w
         (_, _) -> reevaluateWorld $ foldl go w botsToReevaluate
   where
     botsToReevaluate = M.toList $ M.filter canReevaluateBot (wBots w)
@@ -163,7 +162,14 @@ printError e = do
     putStrLn e
 
 run :: [Instruction] -> IO ()
-run is = print $ worldStopCondition $ reevaluateWorld $ assignAllValuesInWorld (buildWorld is) is
+run is = print $ firstThreeValuesMultiplied $ reevaluateWorld $ assignAllValuesInWorld (buildWorld is) is
+  where
+    firstThreeValuesMultiplied =
+        product
+        . map (value . head . oValues)
+        . M.elems
+        . M.filter (\Output{ oId = (OutputId id') } -> id' `elem` [0, 1, 2])
+        . wOutputs
 
 parseInput :: Text -> Either ParseError [Instruction]
 parseInput = runParser (instructionsParser <* eof) "" . T.strip
