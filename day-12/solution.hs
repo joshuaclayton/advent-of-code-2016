@@ -143,7 +143,7 @@ buildComputer =
     Computer
         { a = newRegister
         , b = newRegister
-        , c = newRegister
+        , c = incrementRegister' newRegister
         , d = newRegister
         }
 
