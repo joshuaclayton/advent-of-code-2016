@@ -12,20 +12,6 @@ import           Text.Megaparsec hiding (State)
 import qualified Text.Megaparsec.Lexer as L
 import           Text.Megaparsec.Text
 
-main :: IO ()
-main = either (printError . show) run . parseInput . T.pack =<< getContents
-
-parseInput :: Text -> Either ParseError [Instruction]
-parseInput = runParser (instructionsParser <* eof) "" . T.strip
-
-printError :: String -> IO ()
-printError e = do
-    putStrLn "There was a problem parsing the input:\n"
-    putStrLn e
-
-run :: [Instruction] -> IO ()
-run = print . a . snd . processInstructions buildComputer
-
 data Computer = Computer
     { a :: Register
     , b :: Register
@@ -51,6 +37,20 @@ data Instruction
     deriving Show
 
 type ProcessInstruction = State (InstructionIndex, Computer)
+
+main :: IO ()
+main = either (printError . show) run . parseInput . T.pack =<< getContents
+
+parseInput :: Text -> Either ParseError [Instruction]
+parseInput = runParser (instructionsParser <* eof) "" . T.strip
+
+printError :: String -> IO ()
+printError e = do
+    putStrLn "There was a problem parsing the input:\n"
+    putStrLn e
+
+run :: [Instruction] -> IO ()
+run = print . a . snd . processInstructions buildComputer
 
 addIndex :: Integer -> InstructionIndex -> InstructionIndex
 addIndex i (InstructionIndex i') = InstructionIndex $ i' + i
