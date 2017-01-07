@@ -1,7 +1,10 @@
 #!/usr/bin/env stack
 -- stack --install-ghc runghc --package text --package megaparsec --package mtl
 
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+
+import           Control.Lens
 import           Control.Monad (void, mapM_)
 import           Control.Monad.State (State, execState, get, put, modify)
 import           Data.Bifunctor (first, second)
@@ -13,10 +16,10 @@ import qualified Text.Megaparsec.Lexer as L
 import           Text.Megaparsec.Text
 
 data Computer = Computer
-    { a :: Register
-    , b :: Register
-    , c :: Register
-    , d :: Register
+    { _a :: Register
+    , _b :: Register
+    , _c :: Register
+    , _d :: Register
     } deriving Show
 
 newtype Register = Register Integer deriving Show
@@ -38,6 +41,8 @@ data Instruction
 
 type ProcessInstruction = State (InstructionIndex, Computer)
 
+makeLenses ''Computer
+
 main :: IO ()
 main = either (printError . show) run . parseInput . T.pack =<< getContents
 
@@ -50,7 +55,7 @@ printError e = do
     putStrLn e
 
 run :: [Instruction] -> IO ()
-run = print . a . snd . processInstructions buildComputer
+run = print . view a . snd . processInstructions buildComputer
 
 addIndex :: Integer -> InstructionIndex -> InstructionIndex
 addIndex i (InstructionIndex i') = InstructionIndex $ i' + i
@@ -65,12 +70,12 @@ handleInstruction (IncreaseRegister namedRegister) =
 handleInstruction (DecreaseRegister namedRegister) =
     modify (second (decrementRegister namedRegister)) *> incrementInstruction
 handleInstruction (Copy v namedRegister) =
-    modify (second (\c' -> updateRegister namedRegister (registerFromValue c' v) c')) *> incrementInstruction
+    modify (second (\c' -> updateRegister namedRegister (registerFromValue v c') c')) *> incrementInstruction
 handleInstruction (JumpToInstruction v (Distance d)) = go =<< get
   where
     registerIsZero (Register i) = i == 0
     go (idx, c') =
-        if registerIsZero $ registerFromValue c' v
+        if registerIsZero $ registerFromValue v c'
             then incrementInstruction
             else modify (first (addIndex d))
 
@@ -141,10 +146,10 @@ newRegister = Register 0
 buildComputer :: Computer
 buildComputer =
     Computer
-        { a = newRegister
-        , b = newRegister
-        , c = incrementRegister' newRegister
-        , d = newRegister
+        { _a = newRegister
+        , _b = newRegister
+        , _c = incrementRegister' newRegister
+        , _d = newRegister
         }
 
 incrementRegister' :: Register -> Register
@@ -154,28 +159,19 @@ decrementRegister' :: Register -> Register
 decrementRegister' (Register i) = Register $ i - 1
 
 updateRegister :: NamedRegister -> Register -> Computer -> Computer
-updateRegister (NamedRegister 'a') r c' = c' { a = r }
-updateRegister (NamedRegister 'b') r c' = c' { b = r }
-updateRegister (NamedRegister 'c') r c' = c' { c = r }
-updateRegister (NamedRegister 'd') r c' = c' { d = r }
+updateRegister namedRegister r = findLens namedRegister .~ r
 
 incrementRegister :: NamedRegister -> Computer -> Computer
-incrementRegister (NamedRegister 'a') c' = c' { a = incrementRegister' $ a c' }
-incrementRegister (NamedRegister 'b') c' = c' { b = incrementRegister' $ b c' }
-incrementRegister (NamedRegister 'c') c' = c' { c = incrementRegister' $ c c' }
-incrementRegister (NamedRegister 'd') c' = c' { d = incrementRegister' $ d c' }
+incrementRegister r = over (findLens r) incrementRegister'
 
 decrementRegister :: NamedRegister -> Computer -> Computer
-decrementRegister (NamedRegister 'a') c' = c' { a = decrementRegister' $ a c' }
-decrementRegister (NamedRegister 'b') c' = c' { b = decrementRegister' $ b c' }
-decrementRegister (NamedRegister 'c') c' = c' { c = decrementRegister' $ c c' }
-decrementRegister (NamedRegister 'd') c' = c' { d = decrementRegister' $ d c' }
+decrementRegister r = over (findLens r) decrementRegister'
 
-registerFromValue :: Computer -> Value -> Register
-registerFromValue c' (Raw i) = Register i
-registerFromValue c' (FromRegister n) = valueFromRegister n
-  where
-    valueFromRegister (NamedRegister 'a') = a c'
-    valueFromRegister (NamedRegister 'b') = b c'
-    valueFromRegister (NamedRegister 'c') = c c'
-    valueFromRegister (NamedRegister 'd') = d c'
+registerFromValue :: Value -> Computer -> Register
+registerFromValue (Raw i) = const $ Register i
+registerFromValue (FromRegister n) = view (findLens n)
+
+findLens (NamedRegister 'a') = a
+findLens (NamedRegister 'b') = b
+findLens (NamedRegister 'c') = c
+findLens (NamedRegister 'd') = d
